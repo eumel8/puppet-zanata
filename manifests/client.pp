@@ -104,14 +104,8 @@ class zanata::client(
     require => File["/opt/zanata/zanata-cli-${version}/bin/zanata-cli"],
   }
 
-  if ($::operatingsystemrelease == '16.04') {
-    package { 'default-jre-headless':
-      ensure => present,
-    }
-  } else {
-    package { 'openjdk-7-jre-headless':
-      ensure => present,
-    }
+  package { 'default-jre-headless':
+    ensure => present,
   }
 
   file { "${homedir}/.config/zanata.ini":

@@ -16,21 +16,22 @@
 #
 
 class zanata(
+  $zanata_default_from_address,
+  $zanata_db_password,
   $mysql_host = 'localhost',
   $mysql_port = '3306',
+  $zanata_main_version = 3,
   $zanata_db_name = 'zanata',
   $zanata_db_username = 'zanata',
-  $zanata_db_password,
 
-  $zanata_wildfly_version = '9.0.1',
-  $zanata_wildfly_install_url = 'https://repo1.maven.org/maven2/org/wildfly/wildfly-dist/9.0.1.Final/wildfly-dist-9.0.1.Final.tar.gz',
+  $zanata_wildfly_version = '10.1.0',
+  $zanata_wildfly_install_url = 'https://repo1.maven.org/maven2/org/wildfly/wildfly-dist/10.1.0.Final/wildfly-dist-10.1.0.Final.tar.gz',
 
-  $zanata_hibernate_url = 'https://sourceforge.net/projects/zanata/files/wildfly/wildfly-8.1.0.Final-module-hibernate-main-4.2.15.Final.zip',
-  $zanata_mojarra_url = 'https://sourceforge.net/projects/zanata/files/wildfly/wildfly-8.1.0.Final-module-mojarra-2.1.28.zip',
-  $zanata_url = 'https://sourceforge.net/projects/zanata/files/webapp/zanata-war-3.7.3.war',
-  $zanata_checksum = '59f1ac35cce46ba4e46b06a239cd7ab4e10b5528',
+  $zanata_url = 'https://github.com/zanata/zanata-server/releases/download/server-3.9.6/zanata-3.9.6-wildfly.zip',
+  # newer repo,e.g. https://github.com/zanata/zanata-platform/releases/download/platform-4.2.1/zanata-4.2.1-wildfly.zip
+  # This should be a sha1 of whatever file is hosted at the url above.
+  $zanata_checksum = 'cb7a477f46a118a337b59b9f4004ef7e6c77a1a8',
 
-  $zanata_default_from_address,
   $zanata_storage_dir = '/home/wildfly/zanata',
 
   $zanata_openid_provider_url = '',
@@ -44,27 +45,16 @@ class zanata(
   $zanata_smtp_password = '',
   $zanata_smtp_tls = '',
   $zanata_smtp_ssl = '',
-
 ) {
+  zanata::validate_listener { $zanata_listeners: }
 
   $zanata_file = inline_template('<%= File.basename(@zanata_url) %>')
+  $zanata_ext = inline_template('<%= File.extname(@zanata_url) %>')
   $wildfly_file = inline_template('<%= File.basename(@zanata_wildfly_install_url) %>')
-  $zanata_hibernate_file = inline_template('<%= File.basename(@zanata_hibernate_url) %>')
-  $zanata_mojarra_file = inline_template('<%= File.basename(@zanata_mojarra_url) %>')
-
-  zanata::validate_listener { $zanata_listeners:
-  }
 
   class { '::zanata::wildfly':
     wildfly_version        => $zanata_wildfly_version,
     wildfly_install_source => $zanata_wildfly_install_url,
-  }
-
-  package { [
-    'libmysql-java',
-    'unzip'
-    ]:
-    ensure => present,
   }
 
   file { $zanata_storage_dir:
@@ -73,58 +63,57 @@ class zanata(
     group  => 'wildfly'
   }
 
+  package { 'unzip':
+    ensure => present,
+  }
   include '::archive'
 
-  archive { '/opt/wildfly/standalone/deployments/ROOT.war':
-    ensure        => present,
-    user          => 'wildfly',
-    source        => $zanata_url,
-    checksum_type => 'sha1',
-    checksum      => $zanata_checksum,
-    require       => [
-      Class['wildfly::install'],
-    ]
-  }
+  if ($zanata_ext == '.zip') {
+    # This implies the newer wildfly >= 10 install method where we install
+    # wildfly, then unpack the zanata zip file into that install dir which
+    # gives us all of our deps. You need to make sure you provide a .zip file
+    # url for zanata when using wildfly >= 10.
+    archive { "/tmp/${zanata_file}":
+      ensure        => present,
+      user          => 'wildfly',
+      source        => $zanata_url,
+      extract       => true,
+      extract_path  => '/opt/wildfly',
+      checksum_type => 'sha1',
+      checksum      => $zanata_checksum,
+      require       => [
+        Class['wildfly::install'],
+      ]
+    }
 
-  archive { "/home/wildfly/${zanata_hibernate_file}":
-    ensure       => present,
-    user         => 'wildfly',
-    source       => $zanata_hibernate_url,
-    extract      => true,
-    extract_path => '/opt/wildfly/',
-    require      => Package['unzip'],
-  }
+    file { '/opt/wildfly/standalone/deployments/zanata.war.skipdeploy':
+      # we don't want to serve at /zanata we want to serve at / so we skip
+      # deploying with zanata.war and set up ROOT.war below.
+      ensure  => present,
+      require => Archive["/tmp/${zanata_file}"],
+    }
 
-  archive { "/home/wildfly/${zanata_mojarra_file}":
-    ensure       => present,
-    user         => 'wildfly',
-    source       => $zanata_mojarra_url,
-    extract      => true,
-    extract_path => '/opt/wildfly/',
-    require      => Package['unzip'],
-  }
+    file { '/opt/wildfly/standalone/deployments/ROOT.war':
+      ensure  => link,
+      target  => '/opt/wildfly/standalone/deployments/zanata.war',
+      require => Archive["/tmp/${zanata_file}"],
+    }
 
-  file { '/opt/wildfly/standalone/deployments/mysql-connector-java.jar':
-    ensure  => 'link',
-    target  => '/usr/share/java/mysql-connector-java.jar',
-    require => [
-                Package['libmysql-java'],
-                Class['zanata::wildfly'],
-                ],
+    file { '/opt/wildfly/standalone/configuration/standalone.xml':
+      ensure  => present,
+      notify  => Service['wildfly'],
+      owner   => wildfly,
+      group   => wildfly,
+      content => template('zanata/wildfly-10-standalone.xml.erb'),
+      require => [
+                  Class['zanata::wildfly'],
+                  File['/opt/wildfly/standalone/deployments/zanata.war.skipdeploy'],
+                  File['/opt/wildfly/standalone/deployments/ROOT.war'],
+                  ],
+    }
   }
-
-  file { '/opt/wildfly/standalone/configuration/standalone.xml':
-    ensure  => present,
-    notify  => Service['wildfly'],
-    owner   => wildfly,
-    group   => wildfly,
-    content => template('zanata/standalone.xml.erb'),
-    require => [
-                Class['zanata::wildfly'],
-                Archive['/opt/wildfly/standalone/deployments/ROOT.war'],
-                Archive["/home/wildfly/${zanata_mojarra_file}"],
-                Archive["/home/wildfly/${zanata_hibernate_file}"],
-                ],
+  else {
+    fail('zanata_url must be for a .zip file.')
   }
 }
 

@@ -15,26 +15,14 @@
 # == Class: zanata::wildfly
 #
 class zanata::wildfly(
-  $wildfly_version = '9.0.1',
-  $wildfly_install_source = 'https://repo1.maven.org/maven2/org/wildfly/wildfly-dist/9.0.1.Final/wildfly-dist-9.0.1.Final.tar.gz',
+  $wildfly_version = '10.1.0',
+  $wildfly_install_source = 'https://repo1.maven.org/maven2/org/wildfly/wildfly-dist/10.1.0.Final/wildfly-dist-10.1.0.Final.tar.gz',
 ) {
 
-  if ($::operatingsystemrelease == '16.04') {
+  $javahome = '/usr/lib/jvm/default-java/jre/'
 
-    $javahome = '/usr/lib/jvm/default-java/jre/'
-
-    package { 'default-jre-headless':
-      ensure => present,
-    }
-
-  } else {
-
-    $javahome = '/usr/lib/jvm/java-7-openjdk-amd64/jre/'
-
-    package { 'openjdk-7-jre-headless':
-      ensure => present,
-      alias  => 'default-jre-headless',
-    }
+  package { 'default-jre-headless':
+    ensure => present,
   }
 
   class { '::wildfly':
@@ -44,5 +32,14 @@ class zanata::wildfly(
     java_home      => $javahome,
     java_xmx       => '4096m',
     require        => Package['default-jre-headless'],
+  }
+
+  cron { 'cleanup-wildfly-logs':
+    command     => 'find /opt/wildfly/standalone/log -type f -name \'*.log.*\' -mtime +14 -delete',
+    user        => 'root',
+    hour        => '6',
+    minute      => '7',
+    environment => 'PATH=/usr/bin:/bin:/usr/sbin:/sbin',
+    require     => Class['::wildfly'],
   }
 }
