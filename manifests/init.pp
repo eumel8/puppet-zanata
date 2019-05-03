@@ -25,10 +25,8 @@ class zanata(
   $zanata_wildfly_version = '10.1.0',
   $zanata_wildfly_install_url = 'https://repo1.maven.org/maven2/org/wildfly/wildfly-dist/10.1.0.Final/wildfly-dist-10.1.0.Final.tar.gz',
 
-  $zanata_url = 'https://github.com/zanata/zanata-server/releases/download/server-3.9.6/zanata-war-3.9.6.war',
-  # newer repo,e.g. https://github.com/zanata/zanata-platform/releases/download/platform-4.3.3/zanata-war-4.3.3.war
-  # This should be a sha1 of whatever file is hosted at the url above.
-  $zanata_checksum = '67a360616eaf442b089a39921ff22149d2f0fdb5',
+  $zanata_url = 'https://github.com/zanata/zanata-platform/releases/download/platform-4.6.2/zanata-war-4.6.2.war',
+  $zanata_checksum = 'b95fa867fc2893b939a9d15cd92de931087e53a0',
 
   $zanata_storage_dir = '/home/wildfly/zanata',
 
