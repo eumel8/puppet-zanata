@@ -32,7 +32,6 @@ class zanata::wildfly(
     java_home      => $javahome,
     java_xmx       => '4096m',
     require        => Package['default-jre-headless'],
-    init_system    => 'systemd',
   }
 
   cron { 'cleanup-wildfly-logs':
